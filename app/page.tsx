@@ -1,10 +1,7 @@
 "use client";
 
 import { UpProvider } from "@/components/upProvider";
-import { Donate } from "@/components/Donate";
 import { P5Player } from "@/components/P5Player";
-import { ProfileSearch } from "@/components/ProfileSearch";
-import { useUpProvider } from "@/components/upProvider";
 import { useState, useEffect } from "react";
 
 // Import the LUKSO web-components library
@@ -14,49 +11,30 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Main content component that handles the conditional rendering of Donate and ProfileSearch components.
- * Utilizes the UpProvider context to manage selected addresses and search state.
- *
- * @component
- * @returns {JSX.Element} A component that toggles between Donate and ProfileSearch views
- * based on the isSearching state from UpProvider.
+ * Toont de p5-speler gecentreerd op de pagina.
  */
 function MainContent() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Load web component here if needed
     promise?.then(() => {
       setMounted(true);
     });
   }, []);
 
-  const { selectedAddress, setSelectedAddress, isSearching } = useUpProvider();
-
   if (!mounted) {
-    return null; // or a loading placeholder
+    return null;
   }
 
   return (
-    <>
-      <div className={`${isSearching ? "hidden" : "block"}`}>
-        <P5Player />
-        <Donate selectedAddress={selectedAddress} />
-      </div>
-
-      <div className={`${!isSearching ? "hidden" : "block"}`}>
-        <ProfileSearch onSelectAddress={setSelectedAddress} />
-      </div>
-    </>
+    <main style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <P5Player />
+    </main>
   );
 }
 
 /**
- * Root component of the application that wraps the main content with the UpProvider context.
- * Serves as the entry point for the donation and profile search functionality.
- *
- * @component
- * @returns {JSX.Element} The wrapped MainContent component with UpProvider context
+ * Root: MainContent binnen de UpProvider context.
  */
 export default function Home() {
   return (
