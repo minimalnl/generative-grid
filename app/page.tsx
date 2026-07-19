@@ -3,7 +3,6 @@
 import { UpProvider } from "@/components/upProvider";
 import { Donate } from "@/components/Donate";
 import { P5Player } from "@/components/P5Player";
-import { MintButton } from "@/components/MintButton";
 import { ProfileSearch } from "@/components/ProfileSearch";
 import { useUpProvider } from "@/components/upProvider";
 import { useState, useEffect } from "react";
