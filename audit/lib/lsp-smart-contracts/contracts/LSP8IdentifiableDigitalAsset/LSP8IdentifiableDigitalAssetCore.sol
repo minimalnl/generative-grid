@@ -77,7 +77,12 @@ abstract contract LSP8IdentifiableDigitalAssetCore is
     // Mapping a `tokenId` to its authorized operator addresses.
     mapping(bytes32 => EnumerableSet.AddressSet) internal _operators;
 
-    mapping(address => EnumerableSet.Bytes32Set) internal _tokenIdsForOperator;
+    // Published @lukso/lsp-smart-contracts 0.14.0 declares
+    // `mapping(address => EnumerableSet.Bytes32Set) _tokenIdsForOperator`
+    // here and never reads or writes it. That unused slot shifts every later
+    // variable by one. The mainnet runtime loads `minted` from slot 6, which
+    // is this layout without the unused mapping. The declaration is omitted
+    // so the local reconstruction matches the deployed storage.
 
     // --- Token queries
 

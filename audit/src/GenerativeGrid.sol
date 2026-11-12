@@ -5,9 +5,10 @@
 // This file exists so `forge test` can exercise that behaviour locally.
 // It is not a deployment artifact. Do not broadcast it. The production
 // source stays in contracts/contracts/GenerativeGrid.sol and is not modified.
-// Runtime bytecode of this reconstruction is close to mainnet (32 bytes short
-// at solc 0.8.28, optimizer runs 500, Cancun, viaIR off) but is not an exact
-// match. See the audit report. Comments do not change the opcodes.
+// Runtime bytecode of this file, compiled as the test suite does, is not the
+// mainnet runtime. A closer compile is recorded in the follow-up section of
+// the audit report and is still not byte-identical. Comments do not change
+// the opcodes. Do not broadcast this contract.
 
 pragma solidity ^0.8.27;
 

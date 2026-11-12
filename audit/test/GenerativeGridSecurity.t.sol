@@ -10,6 +10,8 @@ import {
     ReenteringMinter,
     StaticReenteringMinter,
     PlainContractMinter,
+    SeedPeekingMinter,
+    SawSeed,
     RevertingSink,
     ReenteringOwner
 } from "./helpers/Attackers.sol";
@@ -18,7 +20,10 @@ import {
 ///         Every transaction stays inside this Foundry process.
 contract GenerativeGridSecurityTest is Test {
     uint256 internal constant BASE = 0.0625 ether;
-    uint256 internal constant MINTED_SLOT = 7;
+    /// @dev Mainnet loads `minted` from slot 6. Published LSP 0.14.0 reserves an
+    ///      unused `_tokenIdsForOperator` mapping in front of it; that declaration
+    ///      is omitted in the vendored core so this reconstruction uses slot 6.
+    uint256 internal constant MINTED_SLOT = 6;
 
     /// @dev The artist vault. Used only as an account that must fail owner calls.
     ///      No test transfers ownership to this address.
@@ -39,9 +44,10 @@ contract GenerativeGridSecurityTest is Test {
 
     receive() external payable {}
 
-    function test_mintedLivesInSlot7() public {
+    function test_mintedLivesInSlot6() public {
         _mintAs(address(this), 1);
         assertEq(uint256(vm.load(address(grid), bytes32(MINTED_SLOT))), 1);
+        assertEq(uint256(vm.load(address(grid), bytes32(uint256(7)))), 0);
     }
 
     function test_unpaidMintRevertsAndMovesNoValue() public {
@@ -212,6 +218,24 @@ contract GenerativeGridSecurityTest is Test {
         assertEq(grid.minted(), 1);
         assertEq(grid.tokenOwnerOf(bytes32(uint256(1))), address(plain));
         assertEq(grid.seedOf(1), _predict(address(plain), 1));
+    }
+
+    /// @dev Sibling of the LSP1 reject test. The caller is not an LSP1 receiver.
+    ///      It still sees the seed after mint returns, then reverts the transaction.
+    function test_nonLsp1CallerCanReadTheSeedAndRevertTheMint() public {
+        SeedPeekingMinter peeker = new SeedPeekingMinter(grid);
+        uint256 price = grid.currentPrice();
+        uint256 expected = _predict(address(peeker), 1);
+        vm.deal(address(peeker), price);
+
+        vm.expectRevert(abi.encodeWithSelector(SawSeed.selector, expected));
+        peeker.mint{value: price}();
+
+        assertEq(grid.minted(), 0);
+        assertEq(grid.totalSupply(), 0);
+        assertEq(grid.seedOf(1), 0);
+        assertEq(address(grid).balance, 0);
+        assertEq(address(peeker).balance, price);
     }
 
     function test_twoMintersSameBlockGetSequentialIdsAndDifferentSeeds() public {

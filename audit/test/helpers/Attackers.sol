@@ -105,6 +105,25 @@ contract PlainContractMinter {
     }
 }
 
+/// @notice Thrown after a successful local mint so the whole transaction rolls back.
+///         The seed is in the revert data, which is the only place it survives the rollback.
+error SawSeed(uint256 seed);
+
+/// @notice Not an LSP1 receiver: no supportsInterface, no universalReceiver.
+///         It mints, reads the seed the mint just wrote, then reverts.
+contract SeedPeekingMinter {
+    GenerativeGrid public immutable grid;
+
+    constructor(GenerativeGrid grid_) {
+        grid = grid_;
+    }
+
+    function mint() external payable {
+        grid.mint{value: msg.value}();
+        revert SawSeed(grid.seedOf(grid.minted()));
+    }
+}
+
 contract RevertingSink {
     receive() external payable {
         revert("sink");

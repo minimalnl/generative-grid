@@ -15,6 +15,8 @@ De mintprijs, de voorraadgrens, `withdraw` en de owner-checks doen wat de bron b
 
 Twee dingen staan daar los van. De GitHub-bron op `main` is niet de bron die gedeployed is: `tokenMetadataJSON` op keten levert een andere JSON dan het bestand in deze commit. En de runtime-bytecode is geen exacte match met de beste lokale reconstructie (15190 bytes op keten, 15158 lokaal). Het gedrag dat we via `eth_call` hebben gelezen, klopt met de reconstructie. De ontbrekende 32 bytes zijn niet verklaard.
 
+De follow-up onderaan dit rapport (zelfde datum, tweede ronde) verklaart dat lengtegat deels. De 15158-byte build is LSP 0.14.0. De keten gebruikt een latere LSP8, met `minted` in slot 6. Een byte-identieke reconstructie is ook met die bron niet gevonden.
+
 De enige door een aanvaller bruikbare bevinding is dat een LSP1-ontvanger de mint kan terugdraaien nadat de seed al vaststaat. Een gewone EOA kan dat niet. Er is geen pad gevonden waarmee een vreemde het saldo of de metadata wegneemt.
 
 ## De vier vragen
@@ -362,3 +364,90 @@ Wat niet volledig is nagebouwd: de byte-identieke compiler-run, de UP-implementa
 ## Buiten scope
 
 De Next.js-app in deze repository is niet de mint-UI en is niet gewijzigd. De Universal Profile-implementatie is alleen herkend als gedeelde proxy van owner en kluis. Marketplace-afhandeling van LSP18, de visuele correctheid van het p5-beeld voorbij de seed, en het testnet-contract `0xF4947C5F85115D9FA6c039Ac459C630370F8F239` zijn niet geaudit.
+
+## Follow-up 12 november 2026
+
+Tweede ronde op dezelfde branch en dezelfde pull request. Geen mainnet-transactie, geen broadcast, geen wijziging aan `contracts/contracts/GenerativeGrid.sol` of de live site. `0x7070b7Cb8fAe99B6C7DDd0eaBe831DCb6c3047FD` is nergens als owner gezet en wordt hier niet als owner aanbevolen.
+
+De cijfers uit de eerste ronde zijn opnieuw gemeten. Waar ze kloppen, blijft dat zo. Waar ze de keten niet dekten, staat dat hier.
+
+### Wat nu is opgelost
+
+- De 32-byte kloof van de eerste reconstructie is een bronverschil, niet een metadata-hash. LSP 0.14.0 declareert `mapping(address => EnumerableSet.Bytes32Set) _tokenIdsForOperator` en leest of schrijft die mapping nergens. Daardoor staat `minted` in die build in slot 7. Op de keten staat `minted` in slot 6: `eth_getStorageAt` slot 6 is `7` zolang er zeven stukken gemint zijn, slot 8 is de script-string (1684 bytes) en slot 9 is `imageBaseURI` (46 bytes). De lokale suite laat die ongebruikte mapping weg, en `test_mintedLivesInSlot6` eist slot 6. De lengte van die suite-build blijft 15158 bytes: een PUSH1-immediate verandert de lengte niet.
+- De 4-byte waarden in de 0.14-runtime en in de mainnet-runtime verschillen op drie errors. Alleen lokaal: `LSP8CannotSendToSelf()` (`0x5d67d6c1`). Alleen op de keten: `LSP8RevokeOperatorNotAuthorized(address,address,bytes32)` (`0x760b5acd`) en `LSP8TokenOwnerChanged(bytes32,address,address)` (`0x5a9c31d3`). Die twee errors, en de layout zonder de ongebruikte mapping, staan in `lukso-network/lsp-smart-contracts` commit `f77b5582a7d190f1f83e349b9ad406f7beb60bb5` (2024-03-04, monorepo op develop). Dezelfde errors staan in `@lukso/lsp8-contracts` vanaf 0.15. Die pakketten hangen aan ERC725 7 of 8.
+- De mainnet-runtime bevat de string `Ownable: caller is not the owner` en bevat `OwnableCallerNotTheOwner` (`0xbf1169c5`) niet. ERC725 6.0.0, 7.0.0 en 8.0.0 gebruiken die custom error. De deploy is dus nieuwere LSP8-bron tegen ERC725 5.x gecompileerd. ERC725 5.2.0 compileert die commit, en elke PUSH4 in die build komt ook in de mainnet-runtime voor. Geen selector zit nog maar aan één kant.
+- Een contract zonder LSP1 kan de seed lezen nadat `mint` terugkeert en de hele transactie daarna terugdraaien. `test_nonLsp1CallerCanReadTheSeedAndRevertTheMint` doet dat lokaal. De medium-bevinding uit de eerste ronde is daarmee breder dan alleen een LSP1-ontvanger: elke tussenschakel met eigen code kan een seed bekijken en verwerpen. Een EOA kan dat nog steeds niet, want na de mint keert de controle niet naar eigen code terug.
+- De owner-UP is gelezen, niet aangepast. Zie hieronder. `0x7070…` heeft op die UP geen permissie-entry.
+
+### Wat open blijft
+
+Een byte-identieke reconstructie is niet bereikt. De dichtstbijzijnde build is 15191 bytes, één byte langer dan de keten, en de opcodes zijn niet dezelfde reeks met één extra byte.
+
+Geprobeerd, telkens met solc 0.8.28, Cancun, viaIR uit, `bytecode_hash = ipfs`, en de immutable `BASE_PRICE` (`62500000000000000`) in de twee PUSH32-plaatsen geplakt voordat er vergeleken werd:
+
+| Bron | OpenZeppelin | optimizer runs | runtime | tegen 15190 |
+| --- | --- | --- | --- | --- |
+| LSP 0.14.0, slot nog gereserveerd, ERC725 5.2.0 | 4.9.6 | 500 | 15158 | 32 korter |
+| dezelfde bron, ongebruikte mapping weg | 4.9.6 | 500 | 15158 | 32 korter |
+| commit `f77b5582a7d190f1f83e349b9ad406f7beb60bb5`, ERC725 5.2.0 | 4.9.6 | 220–240 | 15173 | 17 korter |
+| dezelfde commit | 4.9.6 | 250 | 15203 | 13 langer |
+| dezelfde commit | 4.9.3, 4.9.4 of 4.9.5 | 241–249 | 15161 | 29 korter |
+| dezelfde commit | 4.9.3, 4.9.4 of 4.9.5 | 250 en 251 | 15191 | 1 langer |
+
+Een sweep van 1 tot 50000 runs op de 0.14-combinatie en op de maart-2024-bron landde nooit op 15190. OpenZeppelin 4.9.0–4.9.5 waren in de eerste ronde 12 bytes korter dan 4.9.6; dat verschil staat er bij de maart-2024-bron ook. ERC725 6, 7 en 8 vallen af door de Ownable-string. LSP 0.12 en 0.13 hebben een ander LSP8-interface-id dan `0x3a271706`, en de keten antwoordt `true` op dat id.
+
+De 15191-byte build heeft dezelfde PUSH4-set als de keten. De bytes zijn het niet. `SequenceMatcher` op de opcodes zonder immediate geeft ratio 0.9577 (10025 opcodes lokaal, 10080 op de keten, 147 afwijkende stukken). Het eerste rauwe verschil zit op offset 60, in de dispatcher: de sprong is lokaal `0x0743` en op de keten `0x0745`. Vanaf offset 668 wijkt de stack-volgorde af (`PUSH1 4` tegen `DUP3`). De CBOR-suffix is aan beide kanten 53 bytes, vorm `a2646970667358221220…64736f6c634300081c0033` (solc 0.8.28, ipfs). De hash erin verschilt, zoals het hoort wanneer de code verschilt. De twee immutable woorden verklaren de lengte niet: ze zijn 32 bytes aan beide kanten.
+
+Niet stuk voor stuk opnieuw gecompileerd: de LSP8-commits ná `f77b5582` tot de refactor van 26 januari 2026 die LSP8-`require`s door andere custom errors vervangt. Die refactor zou de PUSH4-set veranderen, en de keten matcht de set van `f77b5582`. Een latere commit kan de codegen nog wel veranderen zonder de selectors te veranderen. Dat is precies de resterende byte.
+
+De praktische volgende stap is het standard-json van de oorspronkelijke deploy (solc-input, optimizer-details, en de exacte dependency-commits). Een byte-diff tegen dat artefact sluit het gat. De 15191-byte build is geen match. Instellingen en hashes staan in `audit/reconstruction/SETTINGS.txt`.
+
+### Fork van de live bytecode
+
+`https://rpc.mainnet.lukso.network` dient block 8769224 niet. Zowel die RPC als `https://42.rpc.thirdweb.com` antwoordt:
+
+```text
+error code -32000: historical state 725af0942a60cde96376c10233ec9774f17d857154aa945e19a8f82e0278a18f is not available
+```
+
+De publieke node bewaart een kort venster. Tijdens het zoeken (laatste block toen 8769549) was 8769421 het oudste block waarvan slot 6 nog leesbaar was, ongeveer 128 blocks. Thirdweb gaf op een tweede lezing HTTP 429.
+
+De fork-tests pinnen daarom block **8769566**, hash `0x796cf66245d1238953eec6b7174cc348aee99c421472d62edae58d4797f9ed22`, timestamp 1794502068 (2026-11-12 16:47:48 UTC). Op dat block is de staat dezelfde als bij 8769224 voor de dingen die we toen lazen: `minted` 7, saldo 0, owner `0x5222…`, codesize 15190, en `keccak256` van de runtime gelijk aan `audit/fixtures/mainnet-runtime.hex`. Het contract is geen proxy, dus dit is dezelfde bytecode als op 8769224.
+
+`forge test` op deze boom: 43 tests, 0 gefaald, 0 overgeslagen. Daarvan 5 in `audit/test/GenerativeGridMainnetFork.t.sol`, allemaal tegen die pin:
+
+| Test | Wat de live bytecode deed |
+| --- | --- |
+| `test_forkPinsTheBlockAndTheLiveRuntime` | blocknummer 8769566, runtime gelijk aan de fixture |
+| `test_forkSupplyPriceAndOwnerMatchTheDeployedState` | owner `0x5222…`, niet de vault, `minted` 7 in slot 6, prijs 0,0625 LYX |
+| `test_forkUnpaidUnderExactAndOverpay` | 0, te weinig en te veel reven `WrongPrice`; exacte betaling mint token 8 en laat de codehash staan |
+| `test_forkSoldOutUsesTheLiveMintedSlot` | slot 6 op 1000 geeft `SoldOut`; vanaf 999 lukt nummer 1000 voor `priceFor(1000)` = 32 LYX |
+| `test_forkVaultCannotWithdrawOrWriteAndOwnerCan` | `0x7070…` faalt op `withdraw`, `setImageBaseURI` en `transferOwnership`; de owner kan uitkeren en de URI schrijven |
+
+Elke call blijft in het Foundry-proces (`vm.createSelectFork`, `vm.prank`, `vm.deal`, `vm.store`). Er is geen broadcast-profiel. `transferOwnership` in de laatste test gaat op de fork naar `0xB0B`, niet naar de vault.
+
+Is 8769566 van de node verdwenen, dan vangt `setUp` de RPC-fout en slaat de vijf tests over. Een nieuwe run zet `FORK_BLOCK` op een block dat de RPC nog dient en controleert dat `minted` en de codehash nog kloppen. Een overgeslagen run is geen geslaagde fork.
+
+### Seed zonder LSP1
+
+`SeedPeekingMinter` heeft geen `supportsInterface` en geen `universalReceiver`. Hij roept `mint` aan, leest `seedOf(minted())`, en revert met `SawSeed(seed)`. De test verwacht die error met de seed uit de formule, en daarna `minted == 0`, saldo 0, en de betaling terug bij de aanroeper. Dat is hetzelfde economische effect als de LSP1-test: de seed is zichtbaar voordat de transactie vastligt, en een contract kan blijven proberen tot de seed bevalt. De eerste ronde koppelde dat aan de LSP1-callback omdat `force = true` die callback aanroept. Deze test laat zien dat de callback niet nodig is zodra de aanroeper zelf een contract is.
+
+### Owner-UP `0x5222…`, alleen gelezen
+
+`0x52224e802F722A3F3f1de8b2157597ae7fEfffD1` is een EIP-1167-proxy naar `0x3024d38ea2434ba6635003dc1bdc0dab5882ed4f`. `owner()` op die proxy is `0x538f51ae89406B7555FA19F2Dd27021D06C5addE`, zelf een EIP-1167-proxy naar `LSP6KeyManagerInit` op `0x2fe3aed98684e7351ad2d408a43ce09a738bf8a4`. `target()` van de key manager wijst terug naar de UP. De vault `0x7070…` is een aparte UP naar dezelfde implementatie `0x3024…` en is geen controller van `0x5222…`.
+
+`AddressPermissions[]` op de UP heeft lengte 3. Sleutels volgens LSP2: `bytes10`-prefix, dan `0x0000`, dan het adres. Permissiebits uit de geverifieerde `LSP6Constants` van de key-manager-implementatie (solc 0.8.17 op de explorer).
+
+| Controller | Wat het is | `permissions` | Gevolg voor dit NFT-contract |
+| --- | --- | --- | --- |
+| `0x7870c5b8bc9572a8001c3f96f7ff59961b23500d` | geverifieerd `LSP1UniversalReceiverDelegateUP` | `0x60080` = `REENTRANCY`, `SUPER_SETDATA`, `SETDATA` | Geen `CALL`. Kan het NFT-contract niet aanroepen. `SUPER_SETDATA` slaat alleen de controle over voor gewone ERC725Y-sleutels. Permissie-sleutels eisen `ADDCONTROLLER` of `EDITPERMISSIONS`, en die bits heeft deze delegate niet. |
+| `0x7fb53f018c1f8b4d2ee4579dac0eec323eea06a6` | EOA, codesize 0 | `0x7f3f06` | Wel `SUPER_CALL`, `CALL`, `SUPER_TRANSFERVALUE`, `TRANSFERVALUE`, `SUPER_SETDATA`, `SETDATA`, `EDITPERMISSIONS`, `ADDCONTROLLER`, `DEPLOY`, `SIGN`, `ENCRYPT`, `DECRYPT`, `EXECUTE_RELAY_CALL` en de static-call-bits. `AllowedCalls` is leeg. `SUPER_CALL` slaat die lijst over, dus deze EOA kan de UP `withdraw`, `setData`, `setDataForTokenId`, `setImageBaseURI`, `transferOwnership` en `renounceOwnership` op het NFT laten aanroepen. `CHANGEOWNER`, de extension-bits, de universal-receiver-delegate-bits, `REENTRANCY` en beide delegatecall-bits ontbreken. |
+| `0xeb7a7b91b5b7188c098cb64dd01f59c9d876566d` | EIP-1167 naar `UniversalProfileInit` `0x52c90985AF970D4E0DC26Cb5D052505278aF32A9` | `0x2` = alleen `ADDCONTROLLER` | Kan het NFT nu niet aanroepen. De geverifieerde key manager eist `ADDCONTROLLER` om een nog lege permissie-sleutel te schrijven, en de bron heeft geen check die het toegekende bitveld tot de eigen bits beperkt. Deze UP kan dus een nieuwe controller aanstellen. |
+
+Geen van de drie heeft `CHANGEOWNER` of `DELEGATECALL`. De key manager zelf vervangen via de LSP6-owner-permissie zit niet in deze set. `transferOwnership` op het NFT is een gewone call, en de EOA met `SUPER_CALL` kan die wel door de UP laten doen. Dat is vastgesteld door de bits en de geverifieerde key-manager-bron te lezen. Er is geen permissie gewijzigd.
+
+`0x7070…` komt in `AddressPermissions[]` niet voor en heeft een lege permissie-sleutel. Die rekening hoort niet de owner van het NFT-contract te worden.
+
+### Tests na deze ronde
+
+`forge test` vanuit `audit/`: 38 tests in `GenerativeGridSecurity.t.sol` en 5 in `GenerativeGridMainnetFork.t.sol`. 43 geslaagd, 0 gefaald, 0 overgeslagen, op de pin hierboven. Nieuw tegenover de 37 van de eerste ronde: de non-LSP1-rollback, `test_mintedLivesInSlot6` in plaats van de slot-7-test, en de vijf fork-tests. De productiebron en de website zijn niet gewijzigd.

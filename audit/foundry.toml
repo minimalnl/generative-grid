@@ -14,5 +14,6 @@ auto_detect_remappings = false
 allow_paths = [".."]
 fs_permissions = [{ access = "read", path = "./fixtures" }]
 
-# Local tests only. There is no broadcast profile and no RPC endpoint here.
-# Do not add one. These tests must never be pointed at LUKSO Mainnet or Testnet.
+# No broadcast profile. Do not add one, and do not put a private key here.
+# GenerativeGridMainnetFork.t.sol forks the public LUKSO RPC read-only, at a
+# pinned block, inside this process. That fork never broadcasts.

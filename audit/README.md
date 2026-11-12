@@ -14,6 +14,8 @@ Vanuit deze map, met Foundry (hier getest met Foundry 1.9 en solc 0.8.28):
 forge test
 ```
 
+`GenerativeGridMainnetFork.t.sol` forkt de publieke RPC `https://rpc.mainnet.lukso.network` op een vast block, alleen in dit proces. Er is geen broadcast-profiel. De RPC bewaart maar een kort venster aan state. Block 8769224 geeft `historical state ... is not available`. Staat het gepinde block niet meer op de node, dan slaat `setUp` die tests over. Een nieuwe run zet `FORK_BLOCK` op een block dat de RPC nog dient. De follow-up in het rapport noemt het block waarop de tests hier groen waren.
+
 Een enkel geval:
 
 ```bash

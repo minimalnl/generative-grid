@@ -6,3 +6,9 @@ solc 0.8.28
 optimizer runs 500
 evm_version cancun
 via_ir false
+
+The vendored LSP8 core omits the unused `_tokenIdsForOperator` mapping that
+0.14.0 declares and never reads. Mainnet loads `minted` from slot 6, which is
+the layout without that mapping. See audits/generative-square-mainnet-security-2026-11-12.md
+(follow-up) and audit/reconstruction/SETTINGS.txt for the closer compile,
+which is still not byte-identical and is not the input of `forge test`.
