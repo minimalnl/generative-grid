@@ -1,0 +1,19 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc = "0.8.28"
+optimizer = true
+optimizer_runs = 500
+via_ir = false
+evm_version = "cancun"
+bytecode_hash = "ipfs"
+cbor_metadata = true
+auto_detect_remappings = false
+allow_paths = [".."]
+fs_permissions = [{ access = "read", path = "./fixtures" }]
+
+# No broadcast profile. Do not add one, and do not put a private key here.
+# GenerativeGridMainnetFork.t.sol forks the public LUKSO RPC read-only, at a
+# pinned block, inside this process. That fork never broadcasts.

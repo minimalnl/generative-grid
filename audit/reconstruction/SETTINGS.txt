@@ -1,0 +1,65 @@
+Closer compile of the deployed Generative Square runtime. Not byte-identical.
+This directory is notes only. `forge test` does not compile these settings.
+Nothing here is a deployment artifact. Do not broadcast it.
+
+Live runtime: audit/fixtures/mainnet-runtime.hex
+  address 0x33Dd4D3da812e2cc1B3692456470DFDD99659e62
+  chain 42
+  length 15190
+  keccak 0xd8b104b7ce4f5a93a33a96d3ce5154f95123294d994fe0f878408c436fc1f6e3
+  CBOR suffix length 53, solc marker 0x00081c (0.8.28), ipfs
+  hash inside the CBOR: 7e6588e62b86010475e1087d10d1b57fc4ff300be9dac9fa7ba4e2231ff74f29
+
+Suite reconstruction (what `forge test` compiles):
+  GenerativeGrid.sol in audit/src
+  @lukso/lsp-smart-contracts 0.14.0 with the unused
+    mapping(address => EnumerableSet.Bytes32Set) _tokenIdsForOperator removed
+  @erc725/smart-contracts 5.2.0
+  @openzeppelin/contracts 4.9.6
+  solc 0.8.28, optimizer on, runs 500, via_ir false, evm cancun,
+  bytecode_hash ipfs, cbor_metadata true
+  immutable BASE_PRICE patched to 62500000000000000 before any compare
+  deployed runtime length 15158
+  PUSH4 set differs from mainnet:
+    only in this build: 5d67d6c1 LSP8CannotSendToSelf()
+    only on mainnet:    760b5acd LSP8RevokeOperatorNotAuthorized(address,address,bytes32)
+                        5a9c31d3 LSP8TokenOwnerChanged(bytes32,address,address)
+
+Closest compile, measured 12 November 2026, still not equal:
+  LSP8/LSP4/LSP1/LSP2/LSP17 sources from
+    lukso-network/lsp-smart-contracts commit f77b5582a7d190f1f83e349b9ad406f7beb60bb5
+    (2024-03-04, "Setup LSP Smart Contracts as Monorepo on develop")
+    That tree has no _tokenIdsForOperator, has the two mainnet-only errors,
+    and does not have LSP8CannotSendToSelf. Interface id 0x3a271706.
+  @erc725/smart-contracts 5.2.0 (string Ownable; 6/7/8 use custom errors
+    that are absent from the runtime)
+  @openzeppelin/contracts 4.9.3 (4.9.4 and 4.9.5 produced the same length;
+    4.9.6 was 12 bytes longer at the same runs)
+  solc 0.8.28, optimizer on, runs 250, via_ir false, evm cancun,
+  bytecode_hash ipfs, cbor_metadata true
+  two immutable words patched to 62500000000000000
+  length 15191 (one byte longer than mainnet)
+  keccak of the immutable-patched runtime
+    0x5299e4dc1df7fc87ed97563c974d1d0645b6c9fde5deab6719da95810596a668
+  every PUSH4 immediate matches mainnet
+  opcode-name ratio against mainnet 0.9577 (10025 vs 10080 opcodes,
+    147 unequal regions)
+  first raw byte difference at offset 60: dispatcher jump immediate
+    0x0743 locally, 0x0745 on mainnet
+  CBOR still the 53-byte ipfs form for solc 0.8.28, different content hash
+
+Optimizer runs tried on that LSP snapshot with OpenZeppelin 4.9.3:
+  200-249 -> 15151 or 15161
+  241-249 -> 15161
+  250-251 -> 15191
+  none equalled 15190
+OpenZeppelin 4.9.6 at runs 220-240 was 15173; at runs 250 it was 15203.
+A sweep from 1 to 50000 runs never landed on 15190.
+
+Not recompiled one-by-one: later LSP8 commits up to the 2026-01-26
+refactor that replaces LSP8 requires with different custom errors.
+That refactor would change the PUSH4 set. The deployed set matches f77b5582.
+
+Next step: the original deployer standard-json (solc input, optimizer
+details, and the exact dependency commits). A byte-diff against that
+input is the way to close the remaining gap. Do not treat 15191 as a match.
