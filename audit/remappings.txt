@@ -1,0 +1,6 @@
+@lukso/lsp-smart-contracts/=lib/lsp-smart-contracts/
+@erc725/smart-contracts/=lib/erc725/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/
+@lukso/lsp8-contracts/=shims/lsp8-contracts/
+@lukso/lsp4-contracts/=shims/lsp4-contracts/
+forge-std/=lib/forge-std/src/
